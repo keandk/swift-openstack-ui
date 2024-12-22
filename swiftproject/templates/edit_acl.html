@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load dateconv %}
+
+{% block content %}
+<div class="container">
+    <ul class="breadcrumb">
+        <li><a href="{% url 'containerview' %}">Containers</a></li> 
+        <li><span class="divider">/</span>Manage ACLs - {{container}}</li>
+    </ul> 
+        
+    {% include "messages.html" %}
+
+    {% if public %}
+    <div class="alert alert-info">
+        <strong>Public URL:</strong>
+        <a href="{{ base_url }}{% url 'public_objectview' account=account container=container %}" target="_blank">
+            {{ base_url }}{% url 'public_objectview' account=account container=container %}
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Add ACL Form -->
+    <div class="well">
+        <h4>Add Access Control</h4>
+        <form method="POST" action="{% url 'edit_acl' container=container %}" class="form-horizontal">
+            {% csrf_token %}
+            <div class="control-group">
+                <label class="control-label">User/Project ID:</label>
+                <div class="controls">
+                    <input type="text" name="username" class="input-xlarge" 
+                           placeholder="project_id:user_id">
+                    <span class="help-block">For project access use project_id:*</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="controls">
+                    <label class="checkbox inline">
+                        <input type="checkbox" name="read"> Read Access
+                    </label>
+                    <label class="checkbox inline">
+                        <input type="checkbox" name="write"> Write Access
+                    </label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="controls">
+                    <button type="submit" class="btn btn-primary">Add ACL</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- ACL List Table -->
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th style="width: 1em;" class="hidden-phone"></th>
+                <th>Identity</th>
+                <th style="width: 7.5em;">Permissions</th>
+                <th style="width: 7.5em;">Type</th>
+                <th style="width: 1em;">
+                    <div class="dropdown pull-right">
+                        <a class="dropdown-toggle btn btn-mini btn-danger" data-toggle="dropdown">
+                            <i class="icon-cog icon-white"></i>
+                        </a>
+                        <ul class="dropdown-menu">
+                            {% if not public %}
+                            <li>
+                                <a href="#" class="make-public">
+                                    <i class="icon-eye-open"></i> Make Public
+                                </a>
+                            </li>
+                            {% else %}
+                            <li>
+                                <a href="{% url 'edit_acl' container=container %}?delete=.r:*,.rlistings">
+                                    <i class="icon-eye-close"></i> Make Private
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </th>
+            </tr>
+        </thead>
+ 
+        <tbody>
+            {% for user, permission in acls.items %}
+            <tr>
+                <td class="hidden-phone">
+                    <i class="icon-{% if ':*' in user %}group{% else %}user{% endif %}"></i>
+                </td>
+                <td>
+                    {% if user == ".rlistings" %}
+                        {{user}} 
+                        <i class="icon-info-sign" title="Allows listing objects (required for public access)"></i>
+                    {% elif user == ".r:*" %}
+                        {{user}}
+                        <i class="icon-info-sign" title="Allows downloading objects (required for public access)"></i>
+                    {% else %}
+                        {{user}}
+                    {% endif %}
+                </td>
+        
+                <td style="text-align:right;">
+                    {% if permission.read %}
+                        <span class="label label-success">Read</span>
+                    {% endif %}
+                    {% if permission.write %}
+                        <span class="label label-important">Write</span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if ':*' in user %}
+                        <span class="label label-info">Project</span>
+                    {% else %}
+                        <span class="label">User</span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    <a class="btn btn-mini btn-danger" 
+                       href="{% url 'edit_acl' container=container %}?delete={{ user }}"
+                       onclick="return confirm('Remove this access control?');">
+                        <i class="icon-trash icon-white"></i>
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="center">
+                    <em>No access controls defined yet</em>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+{% block jsadd %}
+<script type="text/javascript">
+$(document).ready(function() {
+    // Enable tooltips
+    $('[title]').tooltip({placement: 'right'});
+    
+    // Handle make public action
+    $('.make-public').click(function(e) {
+        e.preventDefault();
+        if(confirm('Make this container publicly readable?')) {
+            var form = $('<form method="POST" action="{% url 'edit_acl' container=container %}">' +
+                        '{% csrf_token %}' +
+                        '<input name="username" type="hidden" value=".r:*,.rlistings">' +
+                        '<input name="read" type="hidden" value="true">' +
+                        '</form>');
+            $('body').append(form);
+            form.submit();
+        }
+    });
+
+    // Form validation
+    $('form').submit(function(e) {
+        var username = $('input[name="username"]').val();
+        var read = $('input[name="read"]').is(':checked');
+        var write = $('input[name="write"]').is(':checked');
+        
+        if(!username) {
+            alert('Please enter a user/project ID');
+            e.preventDefault();
+            return;
+        }
+        
+        if(!read && !write) {
+            alert('Please select at least one permission (read/write)');
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}
